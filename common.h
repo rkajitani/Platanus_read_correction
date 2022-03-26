@@ -13,7 +13,7 @@
 #include <pthread.h>
 #include <omp.h>
 
-#define MAX_READ_LEN 5000
+#define MAX_READ_LEN 50000
 #define MAX_THREAD 100
 #define MAX_EXTENSION_NAME 100
 #define GRANULE 128
