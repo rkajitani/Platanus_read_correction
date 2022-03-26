@@ -16,7 +16,6 @@ void print_correct_usage(void)
     fprintf(stderr, "    -f FILE1 [FILE2 ...] : reads file (fasta or fastq, number <= %u)\n", MAX_FILE_NUM);
     fprintf(stderr, "    -k INT [INT ...]     : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
     fprintf(stderr, "    -e FLOAT             : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
-    fprintf(stderr, "    -q INT               : quality value cutof (def %ld)\n", def.q);
     fprintf(stderr, "    -t INT               : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
     fprintf(stderr, "    -m INT               : memory limit(GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
     fprintf(stderr, "    -h, -help, --help    : print usage\n");
@@ -39,7 +38,6 @@ void option_correct_init(option_correct_t *opt)
     opt->k[2] = 32;
 
     opt->e = 0.03;
-    opt->q = 0;
     opt->t = 1;
     opt->m = 4 * GIBIBYTE;
 }
@@ -81,8 +79,6 @@ int option_correct_parse(option_correct_t *opt, int argc, char **argv)
             i = option_multi_file_name(argc, argv, i, opt->fq_fp, opt->fq_name, &(opt->n_fq));
         else if (!strcmp(argv[i], "-e"))
             i = option_float(argc, argv, i, 0.0, 1.0, &(opt->e));
-        else if (!strcmp(argv[i], "-q"))
-            i = option_int(argc, argv, i, 0, INT64_MAX, &(opt->q));
         else if (!strcmp(argv[i], "-t"))
             i = option_int(argc, argv, i, 1, MAX_THREAD, &(opt->t));
         else if (!strcmp(argv[i], "-m")) {
@@ -119,7 +115,7 @@ void correct(option_correct_t *opt)
     for (i = 0; i < opt->n_fq; ++i) {
         strcpy(ct.fname[opt->n_fa + i], opt->fq_name[i]);
         strcat(ct.fname[opt->n_fa + i], opt->o);
-        corrector_read_fastq(&ct, opt->fq_fp[i], opt->q);
+        corrector_read_fastq(&ct, opt->fq_fp[i]);
     }
 
 
@@ -161,7 +157,7 @@ void correct_mt(option_correct_t *opt)
     for (i = 0; i < opt->n_fq; ++i) {
         strcpy(ctt.fname[opt->n_fa + i], opt->fq_name[i]);
         strcat(ctt.fname[opt->n_fa + i], opt->o);
-        corrector_threads_read_fastq(&ctt, opt->fq_fp[i], opt->q);
+        corrector_threads_read_fastq(&ctt, opt->fq_fp[i]);
     }
 
     for (i = 0; i < opt->n_k; ++i) {
@@ -252,7 +248,7 @@ void corrector_read_fasta(corrector_t *ct, FILE *fp)
     ++ct->n_file;
 }
 
-void corrector_read_fastq(corrector_t *ct, FILE *fp, int8_t qual_cut)
+void corrector_read_fastq(corrector_t *ct, FILE *fp)
 {
     int64_t i;
     int8_t c;
@@ -293,19 +289,6 @@ void corrector_read_fastq(corrector_t *ct, FILE *fp, int8_t qual_cut)
         while ((c = getc(fp)) != '\n' && c != EOF)
             ;
 
-/*
-        i = 0;
-        while ((c = getc(fp)) != '@' && c != EOF) {
-            if (c == '\n')
-                continue;
-            if (c - FASTQ_QUALITY_BASE < qual_cut || seq.base[i] == 4) {
-                seq.unknown_pos[seq.n_unknown] = i;
-                ++seq.n_unknown;
-                seq.base[i] = 0;
-            }
-            ++i;
-        }
-*/
         c = fastq_skip_qual(seq.len, fp);
 
         seq_write(&seq, ct->seq_file);
@@ -323,7 +306,6 @@ void corrector_make_table(corrector_t *ct, uint64_t k_len)
     uint64_t step;
     uint64_t n_used;
     uint64_t max;
-//    uint64_t pre;
     uint64_t *distr;
     uint16_t occ;
     kmer_t kmer;
@@ -484,18 +466,6 @@ void corrector_make_table(corrector_t *ct, uint64_t k_len)
     }
     fclose(unstored_fp);
 
-/*
-    pre = distr[1];
-    for (i = 2; i <= max; ++i) {
-        if (distr[i] >= pre)
-            break;
-        pre = distr[i];
-    }
-    if (i > max)
-        ct->th = 1;
-    else
-        ct->th = i-1;
-*/
     ct->th = get_left_minimal_smooth(distr, max, SMOOTHING_WINDOW);
 
     n_used = 0;
@@ -1216,14 +1186,13 @@ void corrector_threads_read_fasta(corrector_threads_t *ctt, FILE *fp)
     ++ctt->n_file;
 }
 
-void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp, int8_t qual_cut)
+void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp)
 {
     uint16_t i;
     int8_t c;
     uint8_t *u8_p;
     uint8_t base[MAX_READ_LEN];
     uint16_t len;
-    uint16_t st;
     uint16_t n_unknown;
     uint16_t unknown_pos[MAX_READ_LEN+1];
 
@@ -1266,40 +1235,7 @@ void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp, int8_t qua
 
         c = fastq_skip_qual(len, fp);
         u8_p = base;
-/*
-        i = 0;
-        while ((c = getc(fp)) != '@' && c != EOF) {
-            if (c == '\n')
-                continue;
-            if (c - FASTQ_QUALITY_BASE >= qual_cut && base[i] != 4)
-                break;
-            ++i;
-        }
-        st = i;
 
-        while (c != '@' && c != EOF) {
-            if (c == '\n') {
-                c = getc(fp);
-                continue;
-            }
-//            if (c - FASTQ_QUALITY_BASE < qual_cut || base[i] == 4) {
-            if (base[i] == 4) {
-                unknown_pos[n_unknown] = i;
-                ++n_unknown;
-                base[i] = 0;
-            }
-            ++i;
-            c = getc(fp);
-        }
-
-        while (n_unknown > 0 && unknown_pos[n_unknown - 1] == len - 1) {
-            --n_unknown;
-            --len;
-        }
-
-        u8_p = &(base[st]);
-        len -= st;
-*/
         fwrite(&n_unknown, sizeof(uint16_t), 1, ctt->ct[ctt->fid].seq_file); 
         fwrite(unknown_pos, sizeof(uint16_t), n_unknown, ctt->ct[ctt->fid].seq_file); 
         fwrite(&len, sizeof(uint16_t), 1, ctt->ct[ctt->fid].seq_file); 
@@ -1317,7 +1253,6 @@ void corrector_threads_make_table(corrector_threads_t *ctt, uint64_t k_len)
     uint64_t i;
     uint64_t j;
     uint64_t max;
-//    uint64_t pre;
     uint64_t n_used;
     uint64_t *distr;
     uint16_t occ;
@@ -1400,20 +1335,7 @@ void corrector_threads_make_table(corrector_threads_t *ctt, uint64_t k_len)
             pthread_join(ctt->thread[i], NULL); 
     }
 
-/*
-    pre = distr[1];
-    for (i = 2; i <= max; ++i) {
-        if (distr[i] >= pre)
-            break;
-        pre = distr[i];
-    }
-    if (i > max)
-        ctt->th = 1;
-    else
-        ctt->th = i-1;
-*/
     ctt->th = get_left_minimal_smooth(distr, max, SMOOTHING_WINDOW);
-ctt->th = 2;
 
     n_used = 0;
     for (i = ctt->th; i <= max; ++i)

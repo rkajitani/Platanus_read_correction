@@ -18,7 +18,6 @@ typedef struct {
 	FILE *fq_fp[MAX_FILE_NUM];
 	int64_t n_k;
 	int64_t k[MAX_NUM_K];
-	int64_t q;
 	double e;
 } option_correct_t;
 
@@ -69,7 +68,7 @@ void corrector_init(corrector_t *ct, uint64_t mem_lim);
 void corrector_destroy_table(corrector_t *ct);
 void corrector_destroy(corrector_t *ct);
 void corrector_read_fasta(corrector_t *ct, FILE *fp);
-void corrector_read_fastq(corrector_t *ct, FILE *fp, int8_t qual_cut);
+void corrector_read_fastq(corrector_t *ct, FILE *fp);
 void corrector_make_table(corrector_t *ct, uint64_t k_len);
 void corrector_ungap_correct(corrector_t *ct);
 void corrector_gapped_correct(corrector_t *ct);
@@ -79,7 +78,7 @@ void corrector_threads_init(corrector_threads_t *ctt, uint64_t n_thread, uint64_
 void corrector_threads_destroy_table(corrector_threads_t *ctt);
 void corrector_threads_destroy(corrector_threads_t *ctt);
 void corrector_threads_read_fasta(corrector_threads_t *ctt, FILE *fp);
-void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp, int8_t qual_cut);
+void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp);
 void corrector_threads_make_table(corrector_threads_t *ctt, uint64_t k_len);
 void corrector_threads_count(corrector_t *ct);
 void corrector_threads_recount(corrector_t *ct);
