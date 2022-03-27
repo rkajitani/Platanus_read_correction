@@ -12,13 +12,14 @@ void print_correct_usage(void)
 
     fprintf(stderr, "Usage: platanus correct [Options]\n\n");
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "    -o STR               : suffix of output file (def %s, length <= %u)\n", ".corrected", MAX_FILE_LEN);
-    fprintf(stderr, "    -f FILE1 [FILE2 ...] : reads file (fasta or fastq, number <= %u)\n", MAX_FILE_NUM);
-    fprintf(stderr, "    -k INT [INT ...]     : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
-    fprintf(stderr, "    -e FLOAT             : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
-    fprintf(stderr, "    -t INT               : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
-    fprintf(stderr, "    -m INT               : memory limit(GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
-    fprintf(stderr, "    -h, -help, --help    : print usage\n");
+    fprintf(stderr, "    -o STR                : suffix of output file (def %s, length <= %u)\n", ".corrected", MAX_FILE_LEN);
+    fprintf(stderr, "    -fa FILE1 [FILE2 ...] : reads file (fasta, number <= %u)\n", MAX_FILE_NUM);
+    fprintf(stderr, "    -fq FILE1 [FILE2 ...] : reads file (fastq, number <= %u)\n", MAX_FILE_NUM);
+    fprintf(stderr, "    -k INT [INT ...]      : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
+    fprintf(stderr, "    -e FLOAT              : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
+    fprintf(stderr, "    -t INT                : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
+    fprintf(stderr, "    -m INT                : memory limit(GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
+    fprintf(stderr, "    -h, -help, --help     : print usage\n");
 
     fprintf(stderr, "\nOutputs:\n");
     fprintf(stderr, "    INPUT_FILE1.corrected [INPUT_FILE2.corrected ...] \n");
@@ -1073,7 +1074,7 @@ void corrector_show_seq(corrector_t *ct)
             seq_read(&seq, ct->seq_file);
             for (k = 0; k < seq.n_unknown; ++k)
                 seq.base[seq.unknown_pos[k]] = 4;
-            fprintf(out[i], ">seq_%lu_len_%d\n", j+1, seq.len);
+            fprintf(out[i], ">s%lu\n", j+1);
             for (k = 0; k < seq.len; ++k)
                 putc(base_name[seq.base[k]], out[i]);
             putc('\n', out[i]);
@@ -1555,7 +1556,7 @@ void corrector_threads_show_seq(corrector_threads_t *ctt)
             seq_read(&seq, ctt->ct[n_seq % ctt->n_thread].seq_file);
             for (k = 0; k < seq.n_unknown; ++k)
                 seq.base[seq.unknown_pos[k]] = 4;
-            fprintf(out, ">seq_%lu_len_%d\n", j+1, seq.len);
+            fprintf(out, ">s%lu\n", j+1);
             for (k = 0; k < seq.len; ++k)
                 putc(base_name[seq.base[k]], out);
             putc('\n', out);
