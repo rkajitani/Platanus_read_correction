@@ -12,14 +12,16 @@ void print_correct_usage(void)
 
     fprintf(stderr, "Usage: platanus correct [Options]\n\n");
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "    -o STR                : suffix of output file (def %s, length <= %u)\n", ".corrected", MAX_FILE_LEN);
-    fprintf(stderr, "    -fa FILE1 [FILE2 ...] : reads file (fasta, number <= %u)\n", MAX_FILE_NUM);
-    fprintf(stderr, "    -fq FILE1 [FILE2 ...] : reads file (fastq, number <= %u)\n", MAX_FILE_NUM);
-    fprintf(stderr, "    -k INT [INT ...]      : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
-    fprintf(stderr, "    -e FLOAT              : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
-    fprintf(stderr, "    -t INT                : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
-    fprintf(stderr, "    -m INT                : memory limit(GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
-    fprintf(stderr, "    -h, -help, --help     : print usage\n");
+    fprintf(stderr, "  -o STR                       : suffix of output file (def %s, length <= %u)\n", ".corrected", MAX_FILE_LEN);
+    fprintf(stderr, "  -count_fa FILE1 [FILE2 ...]  : reads file for k-mer count (fasta, number <= %u)\n", MAX_FILE_NUM);
+    fprintf(stderr, "  -count_fq FILE1 [FILE2 ...]  : reads file for k-mer count (fastq, number <= %u)\n", MAX_FILE_NUM);
+    fprintf(stderr, "  -target_fa FILE1 [FILE2 ...] : target reads file (fasta, number <= %u)\n", MAX_FILE_NUM);
+    fprintf(stderr, "  -target_fq FILE1 [FILE2 ...] : target reads file (fastq, number <= %u)\n", MAX_FILE_NUM);
+    fprintf(stderr, "  -k INT [INT ...]             : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
+    fprintf(stderr, "  -e FLOAT                     : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
+    fprintf(stderr, "  -t INT                       : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
+    fprintf(stderr, "  -m INT                       : memory limit(GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
+    fprintf(stderr, "  -h, -help, --help            : print usage\n");
 
     fprintf(stderr, "\nOutputs:\n");
     fprintf(stderr, "    INPUT_FILE1.corrected [INPUT_FILE2.corrected ...] \n");
@@ -32,6 +34,11 @@ void option_correct_init(option_correct_t *opt)
     memset(opt, 0, sizeof(option_correct_t));
 
     strcpy(opt->o, ".corrected");
+
+	opt->n_count_fa = 0;
+	opt->n_count_fq = 0;
+	opt->n_target_fa = 0;
+	opt->n_target_fq = 0;
 
     opt->n_k = 3;
     opt->k[0] = 18;
@@ -47,13 +54,21 @@ void option_correct_destroy(option_correct_t *opt)
 {
     uint64_t i;
 
-    for (i = 0; i < opt->n_fa; ++i) {
-        fclose(opt->fa_fp[i]);
-        my_free(opt->fa_name[i]);
+    for (i = 0; i < opt->n_count_fa; ++i) {
+        fclose(opt->count_fa_fp[i]);
+        my_free(opt->count_fa_name[i]);
     }
-    for (i = 0; i < opt->n_fq; ++i) {
-        fclose(opt->fq_fp[i]);
-        my_free(opt->fq_name[i]);
+    for (i = 0; i < opt->n_count_fq; ++i) {
+        fclose(opt->count_fq_fp[i]);
+        my_free(opt->count_fq_name[i]);
+    }
+    for (i = 0; i < opt->n_target_fa; ++i) {
+        fclose(opt->target_fa_fp[i]);
+        my_free(opt->target_fa_name[i]);
+    }
+    for (i = 0; i < opt->n_target_fq; ++i) {
+        fclose(opt->target_fq_fp[i]);
+        my_free(opt->target_fq_name[i]);
     }
 }
 
@@ -74,10 +89,14 @@ int option_correct_parse(option_correct_t *opt, int argc, char **argv)
 		}
         else if (!strcmp(argv[i], "-o"))
             i = option_string(argc, argv, i, MAX_FILE_LEN, opt->o);
-        else if (!strcmp(argv[i], "-fa"))
-            i = option_multi_file_name(argc, argv, i, opt->fa_fp, opt->fa_name, &(opt->n_fa));
-        else if (!strcmp(argv[i], "-fq"))
-            i = option_multi_file_name(argc, argv, i, opt->fq_fp, opt->fq_name, &(opt->n_fq));
+        else if (!strcmp(argv[i], "-count_fa"))
+            i = option_multi_file_name(argc, argv, i, opt->count_fa_fp, opt->count_fa_name, &(opt->n_count_fa));
+        else if (!strcmp(argv[i], "-count_fq"))
+            i = option_multi_file_name(argc, argv, i, opt->count_fq_fp, opt->count_fq_name, &(opt->n_count_fq));
+        else if (!strcmp(argv[i], "-target_fa"))
+            i = option_multi_file_name(argc, argv, i, opt->target_fa_fp, opt->target_fa_name, &(opt->n_target_fa));
+        else if (!strcmp(argv[i], "-target_fq"))
+            i = option_multi_file_name(argc, argv, i, opt->target_fq_fp, opt->target_fq_name, &(opt->n_target_fq));
         else if (!strcmp(argv[i], "-e"))
             i = option_float(argc, argv, i, 0.0, 1.0, &(opt->e));
         else if (!strcmp(argv[i], "-t"))
@@ -92,7 +111,7 @@ int option_correct_parse(option_correct_t *opt, int argc, char **argv)
         }
     }
 
-    if (opt->n_fa == 0 && opt->n_fq == 0) {
+    if ((opt->n_count_fa == 0 && opt->n_count_fq == 0) || (opt->n_target_fa == 0 && opt->n_target_fq == 0)) {
         fputs("error: no input file\n\n", stderr);
         return -1;
     }
@@ -107,16 +126,22 @@ void correct(option_correct_t *opt)
 
     corrector_init(&ct, opt->m);
 
-    ct.n_file = 0;
-    for (i = 0; i < opt->n_fa; ++i) {
-        strcpy(ct.fname[i], opt->fa_name[i]);
+    ct.n_target_file = 0;
+    for (i = 0; i < opt->n_target_fa; ++i) {
+        strcpy(ct.fname[i], opt->target_fa_name[i]);
         strcat(ct.fname[i], opt->o);
-        corrector_read_fasta(&ct, opt->fa_fp[i]);
+        corrector_read_fasta(&ct, opt->target_fa_fp[i], true);
     }
-    for (i = 0; i < opt->n_fq; ++i) {
-        strcpy(ct.fname[opt->n_fa + i], opt->fq_name[i]);
-        strcat(ct.fname[opt->n_fa + i], opt->o);
-        corrector_read_fastq(&ct, opt->fq_fp[i]);
+    for (i = 0; i < opt->n_target_fq; ++i) {
+        strcpy(ct.fname[opt->n_target_fa + i], opt->target_fq_name[i]);
+        strcat(ct.fname[opt->n_target_fa + i], opt->o);
+        corrector_read_fastq(&ct, opt->target_fq_fp[i], true);
+    }
+    for (i = 0; i < opt->n_count_fa; ++i) {
+        corrector_read_fasta(&ct, opt->count_fa_fp[i], false);
+    }
+    for (i = 0; i < opt->n_count_fq; ++i) {
+        corrector_read_fastq(&ct, opt->count_fq_fp[i], false);
     }
 
 
@@ -150,15 +175,21 @@ void correct_mt(option_correct_t *opt)
 
     corrector_threads_init(&ctt, opt->t, opt->m);
 
-    for (i = 0; i < opt->n_fa; ++i) {
-        strcpy(ctt.fname[i], opt->fa_name[i]);
+    for (i = 0; i < opt->n_target_fa; ++i) {
+        strcpy(ctt.fname[i], opt->target_fa_name[i]);
         strcat(ctt.fname[i], opt->o);
-        corrector_threads_read_fasta(&ctt, opt->fa_fp[i]);
+        corrector_threads_read_fasta(&ctt, opt->target_fa_fp[i], true);
     }
-    for (i = 0; i < opt->n_fq; ++i) {
-        strcpy(ctt.fname[opt->n_fa + i], opt->fq_name[i]);
-        strcat(ctt.fname[opt->n_fa + i], opt->o);
-        corrector_threads_read_fastq(&ctt, opt->fq_fp[i]);
+    for (i = 0; i < opt->n_target_fq; ++i) {
+        strcpy(ctt.fname[opt->n_target_fa + i], opt->target_fq_name[i]);
+        strcat(ctt.fname[opt->n_target_fa + i], opt->o);
+        corrector_threads_read_fastq(&ctt, opt->target_fq_fp[i], true);
+    }
+    for (i = 0; i < opt->n_count_fa; ++i) {
+        corrector_threads_read_fasta(&ctt, opt->count_fa_fp[i], false);
+    }
+    for (i = 0; i < opt->n_count_fq; ++i) {
+        corrector_threads_read_fastq(&ctt, opt->count_fq_fp[i], false);
     }
 
     for (i = 0; i < opt->n_k; ++i) {
@@ -202,21 +233,27 @@ void corrector_destroy_table(corrector_t *ct)
 void corrector_destroy(corrector_t *ct)
 {
     corrector_destroy_table(ct);
-    if (ct->seq_file != NULL)
-        fclose(ct->seq_file);
+    if (ct->count_seq_file != NULL)
+        fclose(ct->count_seq_file);
+    if (ct->target_seq_file != NULL)
+        fclose(ct->target_seq_file);
     memset(ct, 0, sizeof(corrector_t));
 }
 
-void corrector_read_fasta(corrector_t *ct, FILE *fp)
+void corrector_read_fasta(corrector_t *ct, FILE *fp, bool is_target)
 {
     int8_t c;
     seq_t seq = {0};
 
-    if (ct->seq_file == NULL && (ct->seq_file = tmpfile_open()) == NULL) {
+	FILE **out_fpp = &(ct->count_seq_file);
+	if (is_target)
+		out_fpp = &(ct->target_seq_file);
+
+    if (*out_fpp == NULL && (*out_fpp = tmpfile_open()) == NULL) {
         fputs("error: cannot create tmpfile_open!\n", stderr);
         my_exit(1);
     }
-    fseek(ct->seq_file, 0, SEEK_END);
+    fseek(*out_fpp, 0, SEEK_END);
     while ((c = getc(fp)) != '>') {
         if (c == EOF) {
             fputs("error: invalid file format!\n", stderr);
@@ -243,23 +280,30 @@ void corrector_read_fasta(corrector_t *ct, FILE *fp)
                 seq.base[seq.len] = ascii2num(c);
             ++seq.len;
         }
-        seq_write(&seq, ct->seq_file);
-        ++ct->n_read[ct->n_file];
+        seq_write(&seq, *out_fpp);
+		if (is_target)
+			++ct->n_target_read[ct->n_target_file];
     }
-    ++ct->n_file;
+
+	if (is_target)
+		++ct->n_target_file;
 }
 
-void corrector_read_fastq(corrector_t *ct, FILE *fp)
+void corrector_read_fastq(corrector_t *ct, FILE *fp, bool is_target)
 {
     int64_t i;
     int8_t c;
     seq_t seq = {0};
 
-    if (ct->seq_file == NULL && (ct->seq_file = tmpfile_open()) == NULL) {
+	FILE **out_fpp = &(ct->count_seq_file);
+	if (is_target)
+		out_fpp = &(ct->target_seq_file);
+
+    if (*out_fpp == NULL && (*out_fpp = tmpfile_open()) == NULL) {
         fputs("error: cannot create tmpfile_open!\n", stderr);
         my_exit(1);
     }
-    fseek(ct->seq_file, 0, SEEK_END);
+    fseek(*out_fpp, 0, SEEK_END);
     while ((c = getc(fp)) != '@') {
         if (c == EOF) {
             fputs("error: invalid file format!\n", stderr);
@@ -292,11 +336,13 @@ void corrector_read_fastq(corrector_t *ct, FILE *fp)
 
         c = fastq_skip_qual(seq.len, fp);
 
-        seq_write(&seq, ct->seq_file);
-        ++ct->n_read[ct->n_file];
+        seq_write(&seq, *out_fpp);
+		if (is_target)
+			++ct->n_target_read[ct->n_target_file];
     }
 
-    ++ct->n_file;
+	if (is_target)
+		++ct->n_target_file;
 }
 
 void corrector_make_table(corrector_t *ct, uint64_t k_len)
@@ -340,10 +386,10 @@ void corrector_make_table(corrector_t *ct, uint64_t k_len)
     unstored_fp = tmpfile_open();
     check_tmpfile(unstored_fp);
 
-    rewind(ct->seq_file);
+    rewind(ct->count_seq_file);
     n_used = 0;
 
-    while (seq_read(&seq, ct->seq_file)) {
+    while (seq_read(&seq, ct->count_seq_file)) {
         if (seq.len < k_len)
             continue;
         seq.unknown_pos[seq.n_unknown] = MAX_READ_LEN+1;
@@ -548,8 +594,8 @@ void corrector_ungap_correct(corrector_t *ct)
     new_file = tmpfile_open();
     check_tmpfile(new_file);
 
-    rewind(ct->seq_file);
-    while (seq_read(&raw_seq, ct->seq_file)) {
+    rewind(ct->target_seq_file);
+    while (seq_read(&raw_seq, ct->target_seq_file)) {
         if (raw_seq.len < k_len) {
             seq_write(&raw_seq, new_file);
             continue;
@@ -683,8 +729,8 @@ void corrector_ungap_correct(corrector_t *ct)
         seq_write(&new_seq, new_file);
         ++ct->n_corrected;
     }
-    fclose(ct->seq_file);
-    ct->seq_file = new_file;
+    fclose(ct->target_seq_file);
+    ct->target_seq_file = new_file;
 }
 
 void corrector_gapped_correct(corrector_t *ct)
@@ -731,8 +777,8 @@ void corrector_gapped_correct(corrector_t *ct)
     kmer_mat = (kmer_t *)my_malloc((n_col*(MAX_READ_LEN+1))*sizeof(kmer_t));
     check_alloc(kmer_mat);
 
-    rewind(ct->seq_file);
-    while (seq_read(&raw_seq, ct->seq_file)) {
+    rewind(ct->target_seq_file);
+    while (seq_read(&raw_seq, ct->target_seq_file)) {
         if (raw_seq.len < k_len) {
             seq_write(&raw_seq, new_file);
             continue;
@@ -1045,8 +1091,8 @@ void corrector_gapped_correct(corrector_t *ct)
         seq_write(&new_seq, new_file);
         ++ct->n_corrected;
     }
-    fclose(ct->seq_file);
-    ct->seq_file = new_file;
+    fclose(ct->target_seq_file);
+    ct->target_seq_file = new_file;
     my_free(score_mat);
     my_free(track_mat);
     my_free(kmer_mat);
@@ -1061,17 +1107,17 @@ void corrector_show_seq(corrector_t *ct)
     seq_t seq;
     FILE *out[MAX_FILE_NUM * 2];
     
-    for (i = 0; i < ct->n_file; ++i) {
+    for (i = 0; i < ct->n_target_file; ++i) {
         if((out[i] = fopen(ct->fname[i], "w")) == NULL) {
             fprintf(stderr, "error: cannot open \"%s\"\n", ct->fname[i]);
             my_exit(1);
         }
     }
 
-    rewind(ct->seq_file);
-    for (i = 0; i < ct->n_file; ++i) {
-        for (j = 0; j < ct->n_read[i]; ++j) {
-            seq_read(&seq, ct->seq_file);
+    rewind(ct->target_seq_file);
+    for (i = 0; i < ct->n_target_file; ++i) {
+        for (j = 0; j < ct->n_target_read[i]; ++j) {
+            seq_read(&seq, ct->target_seq_file);
             for (k = 0; k < seq.n_unknown; ++k)
                 seq.base[seq.unknown_pos[k]] = 4;
             fprintf(out[i], ">s%lu\n", j+1);
@@ -1081,7 +1127,7 @@ void corrector_show_seq(corrector_t *ct)
         }
     }
 
-    for (i = 0; i < ct->n_file; ++i)
+    for (i = 0; i < ct->n_target_file; ++i)
         fclose(out[i]);
 }
 
@@ -1135,24 +1181,33 @@ void corrector_threads_destroy(corrector_threads_t *ctt)
     uint64_t i;
 
     corrector_threads_destroy_table(ctt);
-    for (i = 0; i < ctt->n_thread; ++i) 
-        if (ctt->ct[i].seq_file != NULL)
-            fclose(ctt->ct[i].seq_file);
+    for (i = 0; i < ctt->n_thread; ++i) {
+        if (ctt->ct[i].count_seq_file != NULL)
+            fclose(ctt->ct[i].count_seq_file);
+        if (ctt->ct[i].target_seq_file != NULL)
+            fclose(ctt->ct[i].target_seq_file);
+	}
     memset(ctt, 0, sizeof(corrector_t));
 }
 
-void corrector_threads_read_fasta(corrector_threads_t *ctt, FILE *fp)
+void corrector_threads_read_fasta(corrector_threads_t *ctt, FILE *fp, bool is_target)
 {
     uint64_t i;
     int8_t c;
     seq_t seq = {0};
 
+	FILE **out_fpp[MAX_THREAD];
     for (i = 0; i < ctt->n_thread; ++i) {
-        if (ctt->ct[i].seq_file == NULL && (ctt->ct[i].seq_file = tmpfile_open()) == NULL) {
+		if (is_target)
+			out_fpp[i] = &(ctt->ct[i].target_seq_file);
+		else
+			out_fpp[i] = &(ctt->ct[i].count_seq_file);
+
+        if (*(out_fpp[i]) == NULL && (*(out_fpp[i]) = tmpfile_open()) == NULL) {
             fputs("error: cannot create tmpfile_open!\n", stderr);
             my_exit(1);
         }
-        fseek(ctt->ct[i].seq_file, 0, SEEK_END);
+        fseek(*(out_fpp[i]), 0, SEEK_END);
     }
     while ((c = getc(fp)) != '>') {
         if (c == EOF) {
@@ -1180,14 +1235,16 @@ void corrector_threads_read_fasta(corrector_threads_t *ctt, FILE *fp)
                 seq.base[seq.len] = ascii2num(c);
             ++seq.len;
         }
-        seq_write(&seq, ctt->ct[ctt->fid].seq_file);
+        seq_write(&seq, *(out_fpp[ctt->fid]));
         ctt->fid = (ctt->fid+1) % ctt->n_thread;
-        ++ctt->n_read[ctt->n_file];
+		if (is_target)
+			++ctt->n_target_read[ctt->n_target_file];
     }
-    ++ctt->n_file;
+	if (is_target)
+		++ctt->n_target_file;
 }
 
-void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp)
+void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp, bool is_target)
 {
     uint16_t i;
     int8_t c;
@@ -1197,12 +1254,18 @@ void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp)
     uint16_t n_unknown;
     uint16_t unknown_pos[MAX_READ_LEN+1];
 
+	FILE **out_fpp[MAX_THREAD];
     for (i = 0; i < ctt->n_thread; ++i) {
-        if (ctt->ct[i].seq_file == NULL && (ctt->ct[i].seq_file = tmpfile_open()) == NULL) {
+		if (is_target)
+			out_fpp[i] = &(ctt->ct[i].target_seq_file);
+		else
+			out_fpp[i] = &(ctt->ct[i].count_seq_file);
+
+        if (*(out_fpp[i]) == NULL && (*(out_fpp[i]) = tmpfile_open()) == NULL) {
             fputs("error: cannot create tmpfile_open!\n", stderr);
             my_exit(1);
         }
-        fseek(ctt->ct[i].seq_file, 0, SEEK_END);
+        fseek(*(out_fpp[i]), 0, SEEK_END);
     }
     while ((c = getc(fp)) != '@') {
         if (c == EOF) {
@@ -1237,16 +1300,18 @@ void corrector_threads_read_fastq(corrector_threads_t *ctt, FILE *fp)
         c = fastq_skip_qual(len, fp);
         u8_p = base;
 
-        fwrite(&n_unknown, sizeof(uint16_t), 1, ctt->ct[ctt->fid].seq_file); 
-        fwrite(unknown_pos, sizeof(uint16_t), n_unknown, ctt->ct[ctt->fid].seq_file); 
-        fwrite(&len, sizeof(uint16_t), 1, ctt->ct[ctt->fid].seq_file); 
-        fwrite(u8_p, sizeof(uint8_t), len, ctt->ct[ctt->fid].seq_file); 
+        fwrite(&n_unknown, sizeof(uint16_t), 1, *(out_fpp[ctt->fid])); 
+        fwrite(unknown_pos, sizeof(uint16_t), n_unknown, *(out_fpp[ctt->fid])); 
+        fwrite(&len, sizeof(uint16_t), 1, *(out_fpp[ctt->fid])); 
+        fwrite(u8_p, sizeof(uint8_t), len, *(out_fpp[ctt->fid])); 
 
         ctt->fid = (ctt->fid+1) % ctt->n_thread;
-        ++ctt->n_read[ctt->n_file];
+		if (is_target)
+			++ctt->n_target_read[ctt->n_target_file];
     }
 
-    ++ctt->n_file;
+	if (is_target)
+		++ctt->n_target_file;
 }
 
 void corrector_threads_make_table(corrector_threads_t *ctt, uint64_t k_len)
@@ -1399,8 +1464,8 @@ void corrector_threads_count(corrector_t *ct)
     seq_t seq;
 
     k_len = ct->k_len;
-    rewind(ct->seq_file);
-    while (seq_read(&seq, ct->seq_file)) {
+    rewind(ct->count_seq_file);
+    while (seq_read(&seq, ct->count_seq_file)) {
         if (seq.len < k_len)
             continue;
         seq.unknown_pos[seq.n_unknown] = MAX_READ_LEN+1;
@@ -1545,15 +1610,15 @@ void corrector_threads_show_seq(corrector_threads_t *ctt)
     
     k = 0;
     for (i = 0; i < ctt->n_thread; ++i)
-        rewind(ctt->ct[i].seq_file);
+        rewind(ctt->ct[i].target_seq_file);
     
     n_seq = 0;
-    for (i = 0; i < ctt->n_file; ++i) {
+    for (i = 0; i < ctt->n_target_file; ++i) {
         if((out = fopen(ctt->fname[i], "w")) == NULL)
             fprintf(stderr, "error: cannot open \"%s\"\n", ctt->fname[i]);
 
-        for (j = 0; j < ctt->n_read[i]; ++j) {
-            seq_read(&seq, ctt->ct[n_seq % ctt->n_thread].seq_file);
+        for (j = 0; j < ctt->n_target_read[i]; ++j) {
+            seq_read(&seq, ctt->ct[n_seq % ctt->n_thread].target_seq_file);
             for (k = 0; k < seq.n_unknown; ++k)
                 seq.base[seq.unknown_pos[k]] = 4;
             fprintf(out, ">s%lu\n", j+1);
