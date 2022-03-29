@@ -36,7 +36,8 @@ typedef struct {
 	uint64_t id;
 	uint64_t mem_lim;
 	uint64_t th;
-	uint64_t n_corrected;
+	uint64_t n_cor_read;
+	uint64_t n_cor_base;
 	uint64_t k_len;
 	uint64_t k_mask;
 	uint64_t index_len;
@@ -57,7 +58,8 @@ typedef struct {
 	uint64_t *key_table;
 	uint16_t *val_table;
 	uint64_t th;
-	uint64_t n_corrected;
+	uint64_t n_cor_read;
+	uint64_t n_cor_base;
 	uint64_t mem_lim;
 	uint64_t fid;
 	uint64_t n_target_file;

@@ -168,7 +168,7 @@ void correct(option_correct_t *opt)
 			corrector_make_table(&ct, opt->k[i]);
 			fputs("ungap correction...\n", stderr);
 			corrector_ungap_correct(&ct);
-			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ct.th, ct.n_corrected);
+			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED_READS = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ct.th, ct.n_cor_read, ct.n_cor_base);
 			corrector_destroy_table(&ct);
 		}
 
@@ -176,7 +176,7 @@ void correct(option_correct_t *opt)
 			corrector_make_table(&ct, opt->k[i]);
 			fputs("gapped correction...\n", stderr);
 			corrector_gapped_correct(&ct);
-			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ct.th, ct.n_corrected);
+			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ct.th, ct.n_cor_read, ct.n_cor_base);
 			corrector_destroy_table(&ct);
 		}
     }
@@ -220,7 +220,7 @@ void correct_mt(option_correct_t *opt)
 			corrector_threads_make_table(&ctt, opt->k[i]);
 			fputs("ungap correction...\n", stderr);
 			corrector_threads_ungap_correct(&ctt);
-			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ctt.th, ctt.n_corrected);
+			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ctt.th, ctt.n_cor_read, ctt.n_cor_base);
 			corrector_threads_destroy_table(&ctt);
 		}
 
@@ -228,7 +228,7 @@ void correct_mt(option_correct_t *opt)
 			corrector_threads_make_table(&ctt, opt->k[i]);
 			fputs("gapped correction...\n", stderr);
 			corrector_threads_gapped_correct(&ctt);
-			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ctt.th, ctt.n_corrected);
+			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ctt.th, ctt.n_cor_read, ctt.n_cor_base);
 			corrector_threads_destroy_table(&ctt);
 		}
     }
@@ -605,6 +605,7 @@ void corrector_ungap_correct(corrector_t *ct)
     int64_t maxd;
     int64_t min_score;
     int64_t score;
+    int64_t left_score;
     uint8_t best_base;
     seq_t seq;
     seq_t raw_seq;
@@ -616,7 +617,8 @@ void corrector_ungap_correct(corrector_t *ct)
     if (ct->th <= 1)
         return;
     k_len = ct->k_len;
-    ct->n_corrected = 0;
+    ct->n_cor_read = 0;
+    ct->n_cor_base = 0;
     new_file = tmpfile_open();
     check_tmpfile(new_file);
 
@@ -707,6 +709,7 @@ void corrector_ungap_correct(corrector_t *ct)
             seq_write(&raw_seq, new_file);
             continue;
         }
+		left_score = min_score;
 /************************************************************************************************/
         for (i = st; i < ed; ++i)
             new_seq.base[i] = seq.base[i];
@@ -753,7 +756,8 @@ void corrector_ungap_correct(corrector_t *ct)
         new_seq.len = seq.len;
         new_seq.n_unknown = 0;
         seq_write(&new_seq, new_file);
-        ++ct->n_corrected;
+        ++ct->n_cor_read;
+		ct->n_cor_base += left_score + min_score;
     }
     fclose(ct->target_seq_file);
     ct->target_seq_file = new_file;
@@ -772,6 +776,7 @@ void corrector_gapped_correct(corrector_t *ct)
     int64_t maxd;
     int64_t min_score;
     int64_t min_dist;
+    int64_t left_dist;
     int64_t min_pos;
     int64_t best_track;
     int64_t n_col; 
@@ -789,7 +794,8 @@ void corrector_gapped_correct(corrector_t *ct)
     if (ct->th <= 1)
         return;
     k_len = ct->k_len;
-    ct->n_corrected = 0;
+    ct->n_cor_read = 0;
+    ct->n_cor_base = 0;
     new_file = tmpfile_open();
     check_tmpfile(new_file);
 
@@ -959,6 +965,7 @@ void corrector_gapped_correct(corrector_t *ct)
             seq_write(&raw_seq, new_file);
             continue;
         }
+		left_dist = min_dist;
 
         new_seq.len = 0;
         j = min_pos;
@@ -1115,7 +1122,8 @@ void corrector_gapped_correct(corrector_t *ct)
         new_seq.len += seq.len-ed+min_pos-maxd;
         new_seq.n_unknown = 0;
         seq_write(&new_seq, new_file);
-        ++ct->n_corrected;
+        ++ct->n_cor_read;
+		ct->n_cor_base += left_dist + min_dist;
     }
     fclose(ct->target_seq_file);
     ct->target_seq_file = new_file;
@@ -1608,10 +1616,14 @@ void corrector_threads_ungap_correct(corrector_threads_t *ctt)
         corrector_set_max_edit(&ctt->ct[i], ctt->max_edit);
         pthread_create(&ctt->thread[i], NULL, (void *)corrector_ungap_correct, &ctt->ct[i]);
     }
-    ctt->n_corrected = 0;
     for (i = 0; i < ctt->n_thread; ++i) {
         pthread_join(ctt->thread[i], NULL);
-        ctt->n_corrected += ctt->ct[i].n_corrected;
+	}
+    ctt->n_cor_read = 0;
+    ctt->n_cor_base = 0;
+    for (i = 0; i < ctt->n_thread; ++i) {
+        ctt->n_cor_read += ctt->ct[i].n_cor_read;
+        ctt->n_cor_base += ctt->ct[i].n_cor_base;
     }
 }
 
@@ -1623,10 +1635,14 @@ void corrector_threads_gapped_correct(corrector_threads_t *ctt)
         corrector_set_max_edit(&ctt->ct[i], ctt->max_edit);
         pthread_create(&ctt->thread[i], NULL, (void *)corrector_gapped_correct, &ctt->ct[i]);
     }
-    ctt->n_corrected = 0;
     for (i = 0; i < ctt->n_thread; ++i) {
         pthread_join(ctt->thread[i], NULL);
-        ctt->n_corrected += ctt->ct[i].n_corrected;
+	}
+    ctt->n_cor_read = 0;
+    ctt->n_cor_base = 0;
+    for (i = 0; i < ctt->n_thread; ++i) {
+        ctt->n_cor_read += ctt->ct[i].n_cor_read;
+        ctt->n_cor_base += ctt->ct[i].n_cor_base;
     }
 }
 
