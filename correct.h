@@ -5,6 +5,7 @@
 
 #define MAX_NUM_K 100
 #define MAX_CRR_K 32
+#define DISPLAY_NUM_READ_UNIT 1000L
 
 typedef struct {
 	char o[MAX_FILE_LEN + 1];
@@ -99,6 +100,7 @@ void corrector_threads_finish_table(corrector_t *ct);
 void corrector_threads_show_seq(corrector_threads_t *ctt);
 void corrector_threads_set_th(corrector_threads_t *ctt, int64_t th);
 void corrector_threads_set_max_edit(corrector_threads_t *ctt, double max_edit);
+void corrector_threads_set_id(corrector_threads_t *ctt, int64_t id);
 void corrector_threads_ungap_correct(corrector_threads_t *ctt);
 void corrector_threads_gapped_correct(corrector_threads_t *ctt);
 

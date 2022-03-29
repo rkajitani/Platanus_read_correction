@@ -18,7 +18,7 @@ void print_correct_usage(void)
     fprintf(stderr, "  -target_fa FILE1 [FILE2 ...] : target reads file (fasta, number <= %u)\n", MAX_FILE_NUM);
     fprintf(stderr, "  -target_fq FILE1 [FILE2 ...] : target reads file (fastq, number <= %u)\n", MAX_FILE_NUM);
     fprintf(stderr, "  -k INT [INT ...]             : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
-    fprintf(stderr, "  -c INT                       : occurrence number threshold (-1 means auto, def %l)\n", def.c);
+    fprintf(stderr, "  -c INT                       : occurrence number threshold (-1 means auto, def %ld)\n", def.c);
     fprintf(stderr, "  -e FLOAT                     : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
     fprintf(stderr, "  -t INT                       : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
     fprintf(stderr, "  -m INT                       : memory limit (GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
@@ -166,7 +166,7 @@ void correct(option_correct_t *opt)
 
 		if (!(opt->no_ungap)) {
 			corrector_make_table(&ct, opt->k[i]);
-			fputs("ungap correction...\n", stderr);
+			fprintf(stderr, "ungap correction...\neach dot below indicates %ld reads in a thread (thread ID, 0).\n", DISPLAY_NUM_READ_UNIT);
 			corrector_ungap_correct(&ct);
 			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED_READS = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ct.th, ct.n_cor_read, ct.n_cor_base);
 			corrector_destroy_table(&ct);
@@ -174,7 +174,7 @@ void correct(option_correct_t *opt)
 
 		if (!(opt->no_gapped)) {
 			corrector_make_table(&ct, opt->k[i]);
-			fputs("gapped correction...\n", stderr);
+			fprintf(stderr, "gapped correction...\neach dot below indicates %ld reads in a thread (thread ID, 0).\n", DISPLAY_NUM_READ_UNIT);
 			corrector_gapped_correct(&ct);
 			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ct.th, ct.n_cor_read, ct.n_cor_base);
 			corrector_destroy_table(&ct);
@@ -218,7 +218,7 @@ void correct_mt(option_correct_t *opt)
 
 		if (!(opt->no_ungap)) {
 			corrector_threads_make_table(&ctt, opt->k[i]);
-			fputs("ungap correction...\n", stderr);
+			fprintf(stderr, "ungap correction...\neach dot below indicates %ld reads in a thread (thread ID, 0).\n", DISPLAY_NUM_READ_UNIT);
 			corrector_threads_ungap_correct(&ctt);
 			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ctt.th, ctt.n_cor_read, ctt.n_cor_base);
 			corrector_threads_destroy_table(&ctt);
@@ -226,7 +226,7 @@ void correct_mt(option_correct_t *opt)
 
 		if (!(opt->no_gapped)) {
 			corrector_threads_make_table(&ctt, opt->k[i]);
-			fputs("gapped correction...\n", stderr);
+			fprintf(stderr, "gapped correction...\neach dot below indicates %ld reads in a thread (thread ID, 0).\n", DISPLAY_NUM_READ_UNIT);
 			corrector_threads_gapped_correct(&ctt);
 			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu, CORRECTED_BASES = %lu\n", opt->k[i], ctt.th, ctt.n_cor_read, ctt.n_cor_base);
 			corrector_threads_destroy_table(&ctt);
@@ -607,6 +607,8 @@ void corrector_ungap_correct(corrector_t *ct)
     int64_t score;
     int64_t left_score;
     uint8_t best_base;
+	int64_t next_display_n = DISPLAY_NUM_READ_UNIT;
+	int64_t n_read = 0;
     seq_t seq;
     seq_t raw_seq;
     seq_t new_seq;
@@ -624,6 +626,15 @@ void corrector_ungap_correct(corrector_t *ct)
 
     rewind(ct->target_seq_file);
     while (seq_read(&raw_seq, ct->target_seq_file)) {
+		if (ct->id == 0) {
+			++n_read;
+			if (n_read >= next_display_n) {
+				fputs(".", stderr);
+				fflush(stderr);
+				next_display_n += DISPLAY_NUM_READ_UNIT;
+			}
+		}
+
         if (raw_seq.len < k_len) {
             seq_write(&raw_seq, new_file);
             continue;
@@ -761,6 +772,11 @@ void corrector_ungap_correct(corrector_t *ct)
     }
     fclose(ct->target_seq_file);
     ct->target_seq_file = new_file;
+
+	if (ct->id == 0) {
+		fputs("\n", stderr);
+		fflush(stderr);
+	}
 }
 
 void corrector_gapped_correct(corrector_t *ct)
@@ -782,6 +798,8 @@ void corrector_gapped_correct(corrector_t *ct)
     int64_t n_col; 
     int16_t *score_mat;
     uint8_t *track_mat;
+	int64_t next_display_n = DISPLAY_NUM_READ_UNIT;
+	int64_t n_read = 0;
     seq_t seq;
     seq_t raw_seq;
     seq_t new_seq;
@@ -811,6 +829,15 @@ void corrector_gapped_correct(corrector_t *ct)
 
     rewind(ct->target_seq_file);
     while (seq_read(&raw_seq, ct->target_seq_file)) {
+		if (ct->id == 0) {
+			++n_read;
+			if (n_read >= next_display_n) {
+				fputs(".", stderr);
+				fflush(stderr);
+				next_display_n += DISPLAY_NUM_READ_UNIT;
+			}
+		}
+
         if (raw_seq.len < k_len) {
             seq_write(&raw_seq, new_file);
             continue;
@@ -1130,6 +1157,11 @@ void corrector_gapped_correct(corrector_t *ct)
     my_free(score_mat);
     my_free(track_mat);
     my_free(kmer_mat);
+
+	if (ct->id == 0) {
+		fputs("\n", stderr);
+		fflush(stderr);
+	}
 }
 
 void corrector_show_seq(corrector_t *ct)
@@ -1180,6 +1212,11 @@ double corrector_get_ave_cov(corrector_t *ct)
     }
 
     return (double)total / num;
+}
+
+void corrector_set_id(corrector_t *ct, int64_t id)
+{
+    ct->id = id;
 }
 
 void corrector_set_th(corrector_t *ct, int64_t th)
@@ -1614,6 +1651,7 @@ void corrector_threads_ungap_correct(corrector_threads_t *ctt)
 
     for (i = 0; i < ctt->n_thread; ++i) {
         corrector_set_max_edit(&ctt->ct[i], ctt->max_edit);
+        corrector_set_id(&ctt->ct[i], i);
         pthread_create(&ctt->thread[i], NULL, (void *)corrector_ungap_correct, &ctt->ct[i]);
     }
     for (i = 0; i < ctt->n_thread; ++i) {
@@ -1633,6 +1671,7 @@ void corrector_threads_gapped_correct(corrector_threads_t *ctt)
 
     for (i = 0; i < ctt->n_thread; ++i) {
         corrector_set_max_edit(&ctt->ct[i], ctt->max_edit);
+        corrector_set_id(&ctt->ct[i], i);
         pthread_create(&ctt->thread[i], NULL, (void *)corrector_gapped_correct, &ctt->ct[i]);
     }
     for (i = 0; i < ctt->n_thread; ++i) {
