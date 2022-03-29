@@ -21,7 +21,9 @@ void print_correct_usage(void)
     fprintf(stderr, "  -c INT                       : occurrence number threshold (-1 means auto, def %l)\n", def.c);
     fprintf(stderr, "  -e FLOAT                     : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
     fprintf(stderr, "  -t INT                       : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
-    fprintf(stderr, "  -m INT                       : memory limit(GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
+    fprintf(stderr, "  -m INT                       : memory limit (GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
+    fprintf(stderr, "  -no_ungap                    : not perform ungap correction (def false)\n");
+    fprintf(stderr, "  -no_gapped                   : not perform gapped correction (def false)\n");
     fprintf(stderr, "  -h, -help, --help            : print usage\n");
 
     fprintf(stderr, "\nOutputs:\n");
@@ -50,6 +52,9 @@ void option_correct_init(option_correct_t *opt)
     opt->e = 0.03;
     opt->t = 1;
     opt->m = 4 * GIBIBYTE;
+
+    opt->no_ungap = false;
+    opt->no_gapped = false;
 }
 
 void option_correct_destroy(option_correct_t *opt)
@@ -109,6 +114,14 @@ int option_correct_parse(option_correct_t *opt, int argc, char **argv)
             i = option_int(argc, argv, i, 1, INT64_MAX, &(opt->m));
             opt->m *= GIBIBYTE;
         }
+        else if (!strcmp(argv[i], "-no_ungap")) {
+            opt->no_ungap = true;
+			++i;
+		}
+        else if (!strcmp(argv[i], "-no_gapped")) {
+            opt->no_gapped = true;
+			++i;
+		}
         else {
             fprintf(stderr, "error: wrong option \"%s\"\n\n", argv[i]);
             return -1;
@@ -151,19 +164,23 @@ void correct(option_correct_t *opt)
 
     for (i = 0; i < opt->n_k; ++i) {
         corrector_set_th(&ct, opt->c);
-        corrector_make_table(&ct, opt->k[i]);
         corrector_set_max_edit(&ct, opt->e);
-        fputs("ungap correction...\n", stderr);
-        corrector_ungap_correct(&ct);
-        fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ct.th, ct.n_corrected);
-        corrector_destroy_table(&ct);
-/*
-        corrector_make_table(&ct, opt->k[i]);
-        fputs("gapped correction...\n", stderr);
-        corrector_gapped_correct(&ct);
-        fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ct.th, ct.n_corrected);
-        corrector_destroy_table(&ct);
-*/
+
+		if (!(opt->no_ungap)) {
+			corrector_make_table(&ct, opt->k[i]);
+			fputs("ungap correction...\n", stderr);
+			corrector_ungap_correct(&ct);
+			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ct.th, ct.n_corrected);
+			corrector_destroy_table(&ct);
+		}
+
+		if (!(opt->no_gapped)) {
+			corrector_make_table(&ct, opt->k[i]);
+			fputs("gapped correction...\n", stderr);
+			corrector_gapped_correct(&ct);
+			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ct.th, ct.n_corrected);
+			corrector_destroy_table(&ct);
+		}
     }
 
     corrector_show_seq(&ct);
@@ -199,19 +216,23 @@ void correct_mt(option_correct_t *opt)
 
     for (i = 0; i < opt->n_k; ++i) {
         corrector_threads_set_th(&ctt, opt->c);
-        corrector_threads_make_table(&ctt, opt->k[i]);
         corrector_threads_set_max_edit(&ctt, opt->e);
-        fputs("ungap correction...\n", stderr);
-        corrector_threads_ungap_correct(&ctt);
-        fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ctt.th, ctt.n_corrected);
-        corrector_threads_destroy_table(&ctt);
-/*
-        corrector_threads_make_table(&ctt, opt->k[i]);
-        fputs("gapped correction...\n", stderr);
-        corrector_threads_gapped_correct(&ctt);
-        fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ctt.th, ctt.n_corrected);
-        corrector_threads_destroy_table(&ctt);
-*/
+
+		if (!(opt->no_ungap)) {
+			corrector_threads_make_table(&ctt, opt->k[i]);
+			fputs("ungap correction...\n", stderr);
+			corrector_threads_ungap_correct(&ctt);
+			fprintf(stderr, "ungap correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ctt.th, ctt.n_corrected);
+			corrector_threads_destroy_table(&ctt);
+		}
+
+		if (!(opt->no_gapped)) {
+			corrector_threads_make_table(&ctt, opt->k[i]);
+			fputs("gapped correction...\n", stderr);
+			corrector_threads_gapped_correct(&ctt);
+			fprintf(stderr, "gapped correction: K = %lu, THRESHOLD = %lu, CORRECTED = %lu\n", opt->k[i], ctt.th, ctt.n_corrected);
+			corrector_threads_destroy_table(&ctt);
+		}
     }
 
     corrector_threads_show_seq(&ctt);

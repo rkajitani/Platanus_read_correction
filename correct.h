@@ -26,6 +26,8 @@ typedef struct {
 	int64_t k[MAX_NUM_K];
 	int64_t c;
 	double e;
+	bool no_ungap;
+	bool no_gapped;
 } option_correct_t;
 
 typedef struct {
