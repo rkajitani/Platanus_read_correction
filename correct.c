@@ -36,17 +36,15 @@ void option_correct_init(option_correct_t *opt)
 {
     memset(opt, 0, sizeof(option_correct_t));
 
-    strcpy(opt->o, ".corrected");
+    strcpy(opt->o, ".cor");
 
 	opt->n_count_fa = 0;
 	opt->n_count_fq = 0;
 	opt->n_target_fa = 0;
 	opt->n_target_fq = 0;
 
-    opt->n_k = 3;
-    opt->k[0] = 18;
-    opt->k[1] = 25;
-    opt->k[2] = 32;
+    opt->n_k = 1;
+    opt->k[0] = 21;
 
     opt->c = -1;
     opt->e = 0.03;
