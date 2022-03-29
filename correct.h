@@ -24,6 +24,7 @@ typedef struct {
 	FILE *target_fq_fp[MAX_FILE_NUM];
 	int64_t n_k;
 	int64_t k[MAX_NUM_K];
+	int64_t c;
 	double e;
 } option_correct_t;
 
@@ -80,6 +81,7 @@ void corrector_make_table(corrector_t *ct, uint64_t k_len);
 void corrector_ungap_correct(corrector_t *ct);
 void corrector_gapped_correct(corrector_t *ct);
 void corrector_show_seq(corrector_t *ct);
+void corrector_set_th(corrector_t *ct, int64_t th);
 void corrector_set_max_edit(corrector_t *ct, double max_edit);
 void corrector_threads_init(corrector_threads_t *ctt, uint64_t n_thread, uint64_t mem_lim);
 void corrector_threads_destroy_table(corrector_threads_t *ctt);
@@ -91,6 +93,7 @@ void corrector_threads_count(corrector_t *ct);
 void corrector_threads_recount(corrector_t *ct);
 void corrector_threads_finish_table(corrector_t *ct);
 void corrector_threads_show_seq(corrector_threads_t *ctt);
+void corrector_threads_set_th(corrector_threads_t *ctt, int64_t th);
 void corrector_threads_set_max_edit(corrector_threads_t *ctt, double max_edit);
 void corrector_threads_ungap_correct(corrector_threads_t *ctt);
 void corrector_threads_gapped_correct(corrector_threads_t *ctt);

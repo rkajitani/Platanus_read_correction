@@ -18,6 +18,7 @@ void print_correct_usage(void)
     fprintf(stderr, "  -target_fa FILE1 [FILE2 ...] : target reads file (fasta, number <= %u)\n", MAX_FILE_NUM);
     fprintf(stderr, "  -target_fq FILE1 [FILE2 ...] : target reads file (fastq, number <= %u)\n", MAX_FILE_NUM);
     fprintf(stderr, "  -k INT [INT ...]             : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
+    fprintf(stderr, "  -c INT                       : occurrence number threshold (-1 means auto, def %l)\n", def.c);
     fprintf(stderr, "  -e FLOAT                     : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
     fprintf(stderr, "  -t INT                       : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
     fprintf(stderr, "  -m INT                       : memory limit(GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
@@ -45,6 +46,7 @@ void option_correct_init(option_correct_t *opt)
     opt->k[1] = 25;
     opt->k[2] = 32;
 
+    opt->c = -1;
     opt->e = 0.03;
     opt->t = 1;
     opt->m = 4 * GIBIBYTE;
@@ -97,6 +99,8 @@ int option_correct_parse(option_correct_t *opt, int argc, char **argv)
             i = option_multi_file_name(argc, argv, i, opt->target_fa_fp, opt->target_fa_name, &(opt->n_target_fa));
         else if (!strcmp(argv[i], "-target_fq"))
             i = option_multi_file_name(argc, argv, i, opt->target_fq_fp, opt->target_fq_name, &(opt->n_target_fq));
+        else if (!strcmp(argv[i], "-c"))
+            i = option_int(argc, argv, i, INT64_MIN, INT64_MAX, &(opt->c));
         else if (!strcmp(argv[i], "-e"))
             i = option_float(argc, argv, i, 0.0, 1.0, &(opt->e));
         else if (!strcmp(argv[i], "-t"))
@@ -146,6 +150,7 @@ void correct(option_correct_t *opt)
 
 
     for (i = 0; i < opt->n_k; ++i) {
+        corrector_set_th(&ct, opt->c);
         corrector_make_table(&ct, opt->k[i]);
         corrector_set_max_edit(&ct, opt->e);
         fputs("ungap correction...\n", stderr);
@@ -193,6 +198,7 @@ void correct_mt(option_correct_t *opt)
     }
 
     for (i = 0; i < opt->n_k; ++i) {
+        corrector_threads_set_th(&ctt, opt->c);
         corrector_threads_make_table(&ctt, opt->k[i]);
         corrector_threads_set_max_edit(&ctt, opt->e);
         fputs("ungap correction...\n", stderr);
@@ -513,7 +519,8 @@ void corrector_make_table(corrector_t *ct, uint64_t k_len)
     }
     fclose(unstored_fp);
 
-    ct->th = get_left_minimal_smooth(distr, max, SMOOTHING_WINDOW);
+    if (ct->th < 0)
+		ct->th = get_left_minimal_smooth(distr, max, SMOOTHING_WINDOW);
 
     n_used = 0;
     for (i = ct->th; i <= max; ++i)
@@ -1148,6 +1155,11 @@ double corrector_get_ave_cov(corrector_t *ct)
     return (double)total / num;
 }
 
+void corrector_set_th(corrector_t *ct, int64_t th)
+{
+    ct->th = th;
+}
+
 void corrector_set_max_edit(corrector_t *ct, double max_edit)
 {
     ct->max_edit = max_edit;
@@ -1401,7 +1413,8 @@ void corrector_threads_make_table(corrector_threads_t *ctt, uint64_t k_len)
             pthread_join(ctt->thread[i], NULL); 
     }
 
-    ctt->th = get_left_minimal_smooth(distr, max, SMOOTHING_WINDOW);
+	if (ctt->th < 0)
+		ctt->th = get_left_minimal_smooth(distr, max, SMOOTHING_WINDOW);
 
     n_used = 0;
     for (i = ctt->th; i <= max; ++i)
@@ -1630,6 +1643,11 @@ void corrector_threads_show_seq(corrector_threads_t *ctt)
 
         fclose(out);
     }
+}
+
+void corrector_threads_set_th(corrector_threads_t *ctt, int64_t th)
+{
+    ctt->th = th;
 }
 
 void corrector_threads_set_max_edit(corrector_threads_t *ctt, double max_edit)
