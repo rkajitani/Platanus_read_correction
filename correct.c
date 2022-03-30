@@ -686,12 +686,14 @@ void corrector_ungap_correct(corrector_t *ct)
         min_score = 0;
         for (i = st; i > 0; --i) {
             min_score = maxd + 1;
+			bool valid_flag = false;
             for (j = 0; j < 4; ++j) {
                 kmer[i-1].fwd = (kmer[i].fwd >> 2) | ((uint64_t)j << (2*(k_len-1)));
                 kmer[i-1].rev = ((kmer[i].rev << 2) & ct->k_mask) | (uint64_t)(3^j);
                 occ = corrector_occ(ct, min_u64(kmer[i-1].fwd, kmer[i-1].rev));
                 if (!occ) 
                     continue;
+				valid_flag = true;
                 if (seq.base[i-1] == j) {
                     if (score < min_score || (score == min_score && occ > max_occ)) {
                         min_score = score;
@@ -710,15 +712,15 @@ void corrector_ungap_correct(corrector_t *ct)
                     }
                 }
             }
-            if (min_score > maxd)
-                break;
+			if (!valid_flag) {
+				min_score = score;
+				best_base = j;
+				best_kmer = kmer[i-1];
+			}
+
             score = min_score;
             kmer[i-1] = best_kmer;
             new_seq.base[i-1] = best_base;
-        }
-        if (i != 0 || seq.len == MAX_READ_LEN) {
-            seq_write(&raw_seq, new_file);
-            continue;
         }
 		left_score = min_score;
 /************************************************************************************************/
@@ -729,12 +731,14 @@ void corrector_ungap_correct(corrector_t *ct)
         maxd = min_64(seq.len-ed, (int64_t)(seq.len*ct->max_edit) - min_score);
         for (i = ed; i < seq.len; ++i) {
             min_score = maxd + 1;
+			bool valid_flag = false;
             for (j = 0; j < 4; ++j) {
                 kmer[i-k_len+1].fwd = ((kmer[i-k_len].fwd << 2) & ct->k_mask) | (uint64_t)j;
                 kmer[i-k_len+1].rev = (kmer[i-k_len].rev >> 2) | ((uint64_t)(3^j) << (2*(k_len-1)));
                 occ = corrector_occ(ct, min_u64(kmer[i-k_len+1].fwd, kmer[i-k_len+1].rev));
                 if (!occ) 
                     continue;
+				valid_flag = true;
                 if (seq.base[i] == j) {
                     if (score < min_score || (score == min_score && occ > max_occ)) {
                         min_score = score;
@@ -753,15 +757,15 @@ void corrector_ungap_correct(corrector_t *ct)
                     }
                 }
             }
-            if (min_score> maxd)
-                break;
+            if (!valid_flag) {
+				min_score = score;
+				best_base = j;
+				best_kmer = kmer[i-k_len+1];
+			}
+
             score = min_score;
             kmer[i-k_len+1] = best_kmer;
             new_seq.base[i] = best_base;
-        }
-        if (i != seq.len) {
-            seq_write(&raw_seq, new_file);
-            continue;
         }
 /************************************************************************************************/
         new_seq.len = seq.len;
