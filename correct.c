@@ -714,7 +714,7 @@ void corrector_ungap_correct(corrector_t *ct)
             }
 			if (!valid_flag) {
 				min_score = score;
-				best_base = j;
+				best_base = seq.base[i-1];
 				best_kmer = kmer[i-1];
 			}
 
@@ -759,7 +759,7 @@ void corrector_ungap_correct(corrector_t *ct)
             }
             if (!valid_flag) {
 				min_score = score;
-				best_base = j;
+				best_base = seq.base[i];
 				best_kmer = kmer[i-k_len+1];
 			}
 
