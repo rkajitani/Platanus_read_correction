@@ -18,7 +18,8 @@ void print_correct_usage(void)
     fprintf(stderr, "  -target_fa FILE1 [FILE2 ...] : target reads file (fasta, number <= %u)\n", MAX_FILE_NUM);
     fprintf(stderr, "  -target_fq FILE1 [FILE2 ...] : target reads file (fastq, number <= %u)\n", MAX_FILE_NUM);
     fprintf(stderr, "  -k INT [INT ...]             : k values (<= %u, def %lu)\n", MAX_CRR_K, def.k[0]);
-    fprintf(stderr, "  -c INT                       : occurrence number threshold (-1 means auto, def %ld)\n", def.c);
+    fprintf(stderr, "  -c INT                       : lower occurrence number threshold (-1 means auto, def %ld)\n", def.c);
+    fprintf(stderr, "  -d INT                       : upper occurrence number threshold (-1 means auto, def %ld)\n", def.d);
     fprintf(stderr, "  -e FLOAT                     : max_edit_distance / read_length (<= 1, def %.2f)\n", def.e);
     fprintf(stderr, "  -t INT                       : number of threads (<= %u, def %lu)\n", MAX_THREAD, def.t);
     fprintf(stderr, "  -m INT                       : memory limit (GB, >= 1, def %llu)\n", def.m / GIBIBYTE);
@@ -47,6 +48,7 @@ void option_correct_init(option_correct_t *opt)
     opt->k[0] = 21;
 
     opt->c = -1;
+    opt->d = INT64_MAX;
     opt->e = 0.03;
     opt->t = 1;
     opt->m = 4 * GIBIBYTE;
@@ -104,6 +106,8 @@ int option_correct_parse(option_correct_t *opt, int argc, char **argv)
             i = option_multi_file_name(argc, argv, i, opt->target_fq_fp, opt->target_fq_name, &(opt->n_target_fq));
         else if (!strcmp(argv[i], "-c"))
             i = option_int(argc, argv, i, INT64_MIN, INT64_MAX, &(opt->c));
+        else if (!strcmp(argv[i], "-d"))
+            i = option_int(argc, argv, i, INT64_MIN, INT64_MAX, &(opt->d));
         else if (!strcmp(argv[i], "-e"))
             i = option_float(argc, argv, i, 0.0, 1.0, &(opt->e));
         else if (!strcmp(argv[i], "-t"))
@@ -162,6 +166,7 @@ void correct(option_correct_t *opt)
 
     for (i = 0; i < opt->n_k; ++i) {
         corrector_set_th(&ct, opt->c);
+        corrector_set_upper_th(&ct, opt->d);
         corrector_set_max_edit(&ct, opt->e);
 
 		if (!(opt->no_ungap)) {
@@ -214,6 +219,7 @@ void correct_mt(option_correct_t *opt)
 
     for (i = 0; i < opt->n_k; ++i) {
         corrector_threads_set_th(&ctt, opt->c);
+        corrector_threads_set_upper_th(&ctt, opt->d);
         corrector_threads_set_max_edit(&ctt, opt->e);
 
 		if (!(opt->no_ungap)) {
@@ -691,7 +697,7 @@ void corrector_ungap_correct(corrector_t *ct)
                 kmer[i-1].fwd = (kmer[i].fwd >> 2) | ((uint64_t)j << (2*(k_len-1)));
                 kmer[i-1].rev = ((kmer[i].rev << 2) & ct->k_mask) | (uint64_t)(3^j);
                 occ = corrector_occ(ct, min_u64(kmer[i-1].fwd, kmer[i-1].rev));
-                if (!occ) 
+                if (!occ || occ > ct->upper_th)
                     continue;
 				valid_flag = true;
                 if (seq.base[i-1] == j) {
@@ -736,7 +742,7 @@ void corrector_ungap_correct(corrector_t *ct)
                 kmer[i-k_len+1].fwd = ((kmer[i-k_len].fwd << 2) & ct->k_mask) | (uint64_t)j;
                 kmer[i-k_len+1].rev = (kmer[i-k_len].rev >> 2) | ((uint64_t)(3^j) << (2*(k_len-1)));
                 occ = corrector_occ(ct, min_u64(kmer[i-k_len+1].fwd, kmer[i-k_len+1].rev));
-                if (!occ) 
+                if (!occ || occ > ct->upper_th) 
                     continue;
 				valid_flag = true;
                 if (seq.base[i] == j) {
@@ -1226,6 +1232,11 @@ void corrector_set_id(corrector_t *ct, int64_t id)
 void corrector_set_th(corrector_t *ct, int64_t th)
 {
     ct->th = th;
+}
+
+void corrector_set_upper_th(corrector_t *ct, int64_t upper_th)
+{
+    ct->upper_th = upper_th;
 }
 
 void corrector_set_max_edit(corrector_t *ct, double max_edit)
@@ -1726,6 +1737,11 @@ void corrector_threads_show_seq(corrector_threads_t *ctt)
 void corrector_threads_set_th(corrector_threads_t *ctt, int64_t th)
 {
     ctt->th = th;
+}
+
+void corrector_threads_set_upper_th(corrector_threads_t *ctt, int64_t upper_th)
+{
+    ctt->upper_th = upper_th;
 }
 
 void corrector_threads_set_max_edit(corrector_threads_t *ctt, double max_edit)
