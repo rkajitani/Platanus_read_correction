@@ -1666,6 +1666,7 @@ void corrector_threads_ungap_correct(corrector_threads_t *ctt)
 
     for (i = 0; i < ctt->n_thread; ++i) {
         corrector_set_max_edit(&ctt->ct[i], ctt->max_edit);
+        corrector_set_upper_th(&ctt->ct[i], ctt->upper_th);
         corrector_set_id(&ctt->ct[i], i);
         pthread_create(&ctt->thread[i], NULL, (void *)corrector_ungap_correct, &ctt->ct[i]);
     }
@@ -1686,6 +1687,7 @@ void corrector_threads_gapped_correct(corrector_threads_t *ctt)
 
     for (i = 0; i < ctt->n_thread; ++i) {
         corrector_set_max_edit(&ctt->ct[i], ctt->max_edit);
+        corrector_set_upper_th(&ctt->ct[i], ctt->upper_th);
         corrector_set_id(&ctt->ct[i], i);
         pthread_create(&ctt->thread[i], NULL, (void *)corrector_gapped_correct, &ctt->ct[i]);
     }
