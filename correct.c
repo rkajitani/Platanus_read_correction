@@ -697,7 +697,7 @@ void corrector_ungap_correct(corrector_t *ct)
                 kmer[i-1].fwd = (kmer[i].fwd >> 2) | ((uint64_t)j << (2*(k_len-1)));
                 kmer[i-1].rev = ((kmer[i].rev << 2) & ct->k_mask) | (uint64_t)(3^j);
                 occ = corrector_occ(ct, min_u64(kmer[i-1].fwd, kmer[i-1].rev));
-                if (!occ || occ > ct->upper_th)
+                if ((!occ) || occ > ct->upper_th)
                     continue;
 				valid_flag = true;
                 if (seq.base[i-1] == j) {
@@ -721,7 +721,8 @@ void corrector_ungap_correct(corrector_t *ct)
 			if (!valid_flag) {
 				min_score = score;
 				best_base = seq.base[i-1];
-				best_kmer = kmer[i-1];
+                best_kmer.fwd = (kmer[i].fwd >> 2) | ((uint64_t)(seq.base[i-1]) << (2*(k_len-1)));
+                best_kmer.rev = ((kmer[i].rev << 2) & ct->k_mask) | (uint64_t)(3^(seq.base[i-1]));
 			}
 
             score = min_score;
@@ -742,7 +743,7 @@ void corrector_ungap_correct(corrector_t *ct)
                 kmer[i-k_len+1].fwd = ((kmer[i-k_len].fwd << 2) & ct->k_mask) | (uint64_t)j;
                 kmer[i-k_len+1].rev = (kmer[i-k_len].rev >> 2) | ((uint64_t)(3^j) << (2*(k_len-1)));
                 occ = corrector_occ(ct, min_u64(kmer[i-k_len+1].fwd, kmer[i-k_len+1].rev));
-                if (!occ || occ > ct->upper_th) 
+                if ((!occ) || occ > ct->upper_th) 
                     continue;
 				valid_flag = true;
                 if (seq.base[i] == j) {
@@ -766,7 +767,8 @@ void corrector_ungap_correct(corrector_t *ct)
             if (!valid_flag) {
 				min_score = score;
 				best_base = seq.base[i];
-				best_kmer = kmer[i-k_len+1];
+                best_kmer.fwd = ((kmer[i-k_len].fwd << 2) & ct->k_mask) | (uint64_t)(seq.base[i]);
+                best_kmer.rev = (kmer[i-k_len].rev >> 2) | ((uint64_t)(3^(seq.base[i])) << (2*(k_len-1)));
 			}
 
             score = min_score;
