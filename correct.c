@@ -686,6 +686,7 @@ void corrector_ungap_correct(corrector_t *ct)
         for (i = 0; i < seq.n_unknown; ++i)
             seq.base[seq.unknown_pos[i]] = 4;
         maxd = (int64_t)(seq.len * ct->max_edit);
+
 /*LEFT*/
 /************************************************************************************************/
         score = 0;
@@ -697,24 +698,25 @@ void corrector_ungap_correct(corrector_t *ct)
                 kmer[i-1].fwd = (kmer[i].fwd >> 2) | ((uint64_t)j << (2*(k_len-1)));
                 kmer[i-1].rev = ((kmer[i].rev << 2) & ct->k_mask) | (uint64_t)(3^j);
                 occ = corrector_occ(ct, min_u64(kmer[i-1].fwd, kmer[i-1].rev));
-                if ((!occ) || occ > ct->upper_th)
+                if (!occ)
                     continue;
-				valid_flag = true;
                 if (seq.base[i-1] == j) {
                     if (score < min_score || (score == min_score && occ > max_occ)) {
                         min_score = score;
                         max_occ = occ;
                         best_base = j;
                         best_kmer = kmer[i-1];
+						valid_flag = true;
                     }
                     break;
                 }
                 else {
-                    if (score+1 < min_score || (score+1 == min_score && occ > max_occ)) {
+                    if (occ <= ct->upper_th && (score+1 < min_score || (score+1 == min_score && occ > max_occ))) {
                         min_score = score+1;
                         max_occ = occ;
                         best_base = j;
                         best_kmer = kmer[i-1];
+						valid_flag = true;
                     }
                 }
             }
@@ -743,24 +745,25 @@ void corrector_ungap_correct(corrector_t *ct)
                 kmer[i-k_len+1].fwd = ((kmer[i-k_len].fwd << 2) & ct->k_mask) | (uint64_t)j;
                 kmer[i-k_len+1].rev = (kmer[i-k_len].rev >> 2) | ((uint64_t)(3^j) << (2*(k_len-1)));
                 occ = corrector_occ(ct, min_u64(kmer[i-k_len+1].fwd, kmer[i-k_len+1].rev));
-                if ((!occ) || occ > ct->upper_th) 
+                if (!occ) 
                     continue;
-				valid_flag = true;
                 if (seq.base[i] == j) {
                     if (score < min_score || (score == min_score && occ > max_occ)) {
                         min_score = score;
                         max_occ = occ;
                         best_base = j;
                         best_kmer = kmer[i-k_len+1];
+						valid_flag = true;
                     }
                     break;
                 }
                 else {
-                    if (score+1 < min_score || (score+1 == min_score && occ > max_occ)) {
+                    if (occ <= ct->upper_th && (score+1 < min_score || (score+1 == min_score && occ > max_occ))) {
                         min_score = score+1;
                         max_occ = occ;
                         best_base = j;
                         best_kmer = kmer[i-k_len+1];
+						valid_flag = true;
                     }
                 }
             }
